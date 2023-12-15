@@ -1,0 +1,19 @@
+P4EST_LIBRARY_HOME ?= /path/to/p4est/install/dir
+
+LIBDIR := $(P4EST_LIBRARY_HOME)/lib
+INCDIR := $(P4EST_LIBRARY_HOME)/include
+
+P4EST_COMPILE_CPP_FLAGS ?= $(shell awk '/Cflags:/ {$$1=$$2=""; print $$0}' $(LIBDIR)/pkgconfig/p4est.pc)
+P4EST_COMPILE_LIB_FLAGS ?= $(shell awk '/Libs:/ {$$1=$$2=""; print $$0}' $(LIBDIR)/pkgconfig/p4est.pc)
+
+SC_COMPILE_CPP_FLAGS ?= $(shell awk '/Cflags:/ {$$1=$$2=""; print $$0}' $(LIBDIR)/pkgconfig/libsc.pc)
+SC_COMPILE_LIB_FLAGS ?= $(shell awk '/Libs:/ {$$1=$$2=""; print $$0}' $(LIBDIR)/pkgconfig/libsc.pc)
+
+CFLAGS := -I$(INCDIR) $(SC_COMPILE_CPP_FLAGS) $(P4EST_COMPILE_CPP_FLAGS) 
+LFLAGS := -L$(LIBDIR) $(SC_COMPILE_LIB_FLAGS) $(P4EST_COMPILE_LIB_FLAGS) -ltiff
+
+all:
+	mpic++ -o mesh_from_tiff mesh_from_tiff.cpp $(CFLAGS) $(LFLAGS)
+
+clean:
+	rm -f mesh_from_tiff *.vtu *.pvtu *.visit
