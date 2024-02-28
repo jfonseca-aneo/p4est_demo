@@ -2,6 +2,7 @@
 #include <p4est_to_p8est.h>
 #include <p8est.h>
 #include <p8est_extended.h>
+#include <p8est_iterate.h>
 #include <p8est_vtk.h>
 #include <stdlib.h>
 #include <tiffio.h>
@@ -60,7 +61,7 @@ public:
 };
 
 typedef struct quad_data {
-  uint32_t rgb;
+  double rgb;
 } quad_data_t;
 
 static void init_data(p4est_t *forest, p4est_topidx_t which_tree,
@@ -77,7 +78,8 @@ static void init_data(p4est_t *forest, p4est_topidx_t which_tree,
 
   auto img = input_tiff->imageVectors[factor * v[2]];
 
-  qdata->rgb = img[factor * v[1] * input_tiff->width + factor * v[0]];
+  qdata->rgb = static_cast<double>(
+      img[factor * v[1] * input_tiff->width + factor * v[0]]);
 }
 
 static int coarsen_func(p4est_t *forest, p4est_topidx_t which_tree,
@@ -154,6 +156,53 @@ static int my_gcd(int a, int b) {
   return b;
 }
 
+static void write_mesh_to_file(p4est_t *forest, const char *filename) {
+  int retval;
+  p4est_vtk_context_t *context;
+
+  auto material_data =
+      sc_array_new_size(sizeof(double), forest->local_num_quadrants);
+
+  /* Extract and store the material data from this rank into a sc_array
+   * to attach it as cell data in the mesh vtk */
+  auto k = 0;
+  for (auto t = forest->first_local_tree; t <= forest->last_local_tree; t++) {
+    auto tree = p4est_tree_array_index(forest->trees, t);
+    auto quadrants = &(tree->quadrants);
+    auto n_quads = quadrants->elem_count;
+
+    for (auto q = 0; q < n_quads; q++, k++) {
+      auto quad = p4est_quadrant_array_index(quadrants, q);
+      auto qdata = static_cast<quad_data_t *>(quad->p.user_data);
+      auto val = static_cast<double *>(sc_array_index(material_data, k));
+      *val = qdata->rgb;
+    }
+  }
+
+  context = p4est_vtk_context_new(forest, filename);
+  p4est_vtk_context_set_geom(context, NULL);
+
+  p4est_vtk_context_set_continuous(context, 1);
+
+  context = p4est_vtk_write_header(context);
+  SC_CHECK_ABORT(context != NULL, P4EST_STRING "_vtk: Error writing header");
+
+  context = p4est_vtk_write_cell_dataf(context, 1, /* write tree id */
+                                       0,          /* do not write the level */
+                                       1,          /* write the rank */
+                                       0,          /* do not wrap the rank */
+                                       1, /* Number of scalars data sets */
+                                       0 /* Number of vector data sets */,
+                                       "material_id", material_data, context);
+
+  SC_CHECK_ABORT(context != NULL, P4EST_STRING "_vtk: Error writing cell data");
+
+  retval = p4est_vtk_write_footer(context);
+  SC_CHECK_ABORT(!retval, P4EST_STRING "_vtk: Error writing footer");
+
+  sc_array_destroy(material_data);
+}
+
 int main(int argc, char **argv) {
 
   std::string filePath = argv[1];
@@ -162,9 +211,9 @@ int main(int argc, char **argv) {
 
   input_tiff->printTiffInfo();
 
-  auto width = 416;
-  auto height = 368;
-  auto layers = input_tiff->layers;
+  auto width = 416;                 // input_tiff->width;
+  auto height = 368;                // input_tiff->height;
+  auto layers = input_tiff->layers; // 496
 
   auto t = my_gcd(width, height);
   auto tt = my_gcd(t, layers);
@@ -191,6 +240,9 @@ int main(int argc, char **argv) {
                               1, sizeof(quad_data_t), init_data,
                               static_cast<void *>(input_tiff));
 
+  /* write the brick in vtk file for visualization */
+  write_mesh_to_file(forest, "mesh_from_tiff_uniform");
+
   /* Coarsen based on pixel information */
   p4est_coarsen_ext(forest, 1, 0, coarsen_func, NULL, replace_for_coarsening);
 
@@ -201,7 +253,7 @@ int main(int argc, char **argv) {
   p4est_partition_ext(forest, 0, NULL);
 
   /* write the brick in vtk file for visualization */
-  p4est_vtk_write_file(forest, NULL, "mesh_from_tiff");
+  write_mesh_to_file(forest, "mesh_from_tiff_adaptive");
 
   /* finalize the libraries */
   p4est_destroy(forest);
