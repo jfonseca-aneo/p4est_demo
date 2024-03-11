@@ -78,7 +78,7 @@ static void init_data(p4est_t *forest, p4est_topidx_t which_tree,
   auto img = input_tiff->imageVectors[factor * v[2]];
 
   qdata->rgb = static_cast<double>(
-      img[factor * v[1] * input_tiff->width + factor * v[0]]);
+      TIFFGetR(img[factor * v[1] * input_tiff->width + factor * v[0]]));
 }
 
 static int coarsen_func(p4est_t *forest, p4est_topidx_t which_tree,
@@ -204,15 +204,33 @@ static void write_mesh_to_file(p4est_t *forest, const char *filename) {
 
 int main(int argc, char **argv) {
 
+  if (argc < 3) {
+    std::cout << "Usage: mpirun -np <nprocs> " << argv[0]
+              << " <path_to_tiff>  <tweak_dims>"
+              << "\n";
+    return 1;
+  }
+
   std::string filePath = argv[1];
+  auto opt_for_coarsening = argv[2];
 
   TiffHolder *input_tiff = new TiffHolder(filePath);
 
   input_tiff->printTiffInfo();
 
-  auto width = 416;                 // input_tiff->width;
-  auto height = 368;                // input_tiff->height;
-  auto layers = input_tiff->layers; // 496
+  uint32_t layers;
+  uint32_t width;
+  uint32_t height;
+
+  if (opt_for_coarsening) {
+    width = 416;
+    height = 368;
+    layers = 16;
+  } else {
+    width = input_tiff->width;
+    height = input_tiff->height;
+    layers = input_tiff->layers;
+  }
 
   auto t = my_gcd(width, height);
   auto tt = my_gcd(t, layers);
@@ -243,7 +261,13 @@ int main(int argc, char **argv) {
   write_mesh_to_file(forest, "mesh_from_tiff_uniform");
 
   /* Coarsen based on pixel information */
-  p4est_coarsen_ext(forest, 1, 0, coarsen_func, NULL, replace_for_coarsening);
+  p4est_coarsen_ext(forest, 1,             /* Do recursive coarsening ? */
+                    0,                     /* Do callback orphans ? */
+                    coarsen_func,          /* callback with coarsen criteria */
+                    NULL,                  /* callback to init use data */
+                    replace_for_coarsening /* callback to replace incoming quads
+                                              based on quads they replace */
+  );
 
   /* Face balance */
   p4est_balance_ext(forest, P4EST_CONNECT_FACE, NULL, replace_for_balance);
