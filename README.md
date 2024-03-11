@@ -16,15 +16,24 @@ fine between phase transitions / boundaries.
 - [p4est](https://github.com/cburstedde/p4est)
 - [libTIFF](http://www.libtiff.org/)
 
-A [make file](./Makefile.template) template has been provided
-to facilitate the compilation, just set the `P4EST_LIBRARY_HOME`
-defined in that file and rename it to `Makefile`. 
+Assuming that both libraries are installed, in particular the `libTIFF` is on your `PATH`.
+We provide a minimal Cmake module to find and link against `p4est`, you should define the variable
+`P4EST_ROOT` pointing to a `p4est` installation.  Compilation follows the standard `cmake` workflow:
+
+```bash
+
+mkdir /path/to/build_dir
+cd /path/to/build_dir
+cmake -S /path/to/this/repository -DP4EST_ROOT=/path/to/p4est/install/dir
+make
+
+```
 
 ## Usage
 
-Successful compilation yields the  executable `mesh_from_tiff` which takes
-as argument the path to the desired `tiff` image to build the mesh from.
+Successful compilation yields the  executable `/build_dir/P4EST_DEMO` which takes
+as argument the`.tif` image to build the mesh from.
 
 ### Example
 
-![](./test_example.png)
+![simple example](./test_example.png)

@@ -1,0 +1,44 @@
+cmake_minimum_required(VERSION 3.20.0)
+
+project(p4est_demo LANGUAGES C CXX)
+
+set (P4EST_DEMO_BUGS    jfonseca@aneo.fr)
+set (P4EST_DEMO_SRCDIR  "${PROJECT_SOURCE_DIR}")
+
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/modules")
+
+set(CMAKE_CXX_STANDARD 17)
+
+include(CheckCXXCompilerFlag)
+
+if ($(P4EST_DEMO_SOURCE_DIR) STREQUAL $(CMAKE_BINARY_DIR))
+  message(FATAL_ERROR "In place build not allowed; please use a separate build directory")
+endif()
+
+find_package(Git)
+
+include(GetVersionFromGitTag)
+
+set(P4EST_DEMO VERSION ${P4EST_DEMO_VERSION_STRING})
+
+message(STATUS "Configuring version : ${P4EST_DEMO_VERSION_STRING_FULL}")
+
+add_executable(P4EST_DEMO src/mesh_from_tiff.cpp)
+
+find_package(MPI REQUIRED)
+find_package(TIFF REQUIRED)
+find_package(P4EST REQUIRED)
+
+include_directories(${P4EST_INCLUDE_DIRS})
+
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MPI_CXX_COMPILE_OPTIONS}")
+set (CMAKE_CXX_COMPILER "${MPI_CXX_COMPILER}")
+
+target_link_libraries(P4EST_DEMO
+  PUBLIC ${P4EST_LIBRARIES} TIFF::TIFF
+)
+
+add_custom_target(copy-files ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+  ${CMAKE_SOURCE_DIR}/test
+  ${CMAKE_CURRENT_BINARY_DIR})
