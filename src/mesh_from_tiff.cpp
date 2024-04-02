@@ -17,6 +17,8 @@ public:
   uint32_t height;
   std::vector<std::vector<uint32_t>> imageVectors;
 
+  int initial_level = 0;
+
   TiffHolder(std::string filePath) {
 
     const char *pathAsCString = filePath.c_str();
@@ -51,6 +53,8 @@ public:
 
   ~TiffHolder(){};
 
+  void set_initial_level(int level) { initial_level = level; }
+
   void printTiffInfo() {
     std::cout << "Image dimension information:\n";
     std::cout << "Dim X: " << width << "\n";
@@ -62,6 +66,40 @@ public:
 typedef struct quad_data {
   double rgb;
 } quad_data_t;
+
+static void get_pixel_neighbours(TiffHolder *holder, int i, int j, int k,
+                                 double *neighbours) {
+
+  auto img = holder->imageVectors[k];
+
+  memset(neighbours, -1, sizeof(neighbours));
+
+  if (i - 1 > 0)
+    neighbours[0] =
+        static_cast<double>(TIFFGetR(img[j * holder->width + i - 1]));
+
+  if (i + 1 < holder->width)
+    neighbours[1] =
+        static_cast<double>(TIFFGetR(img[j * holder->width + i + 1]));
+
+  if (j - 1 > 0)
+    neighbours[2] =
+        static_cast<double>(TIFFGetR(img[(j - 1) * holder->width + i]));
+
+  if (j + 1 < holder->height)
+    neighbours[3] =
+        static_cast<double>(TIFFGetR(img[(j + 1) * holder->width + i]));
+
+  if (k - 1 > 0) {
+    auto img = holder->imageVectors[k - 1];
+    neighbours[4] = static_cast<double>(TIFFGetR(img[j * holder->width + i]));
+  }
+
+  if (k + 1 < holder->layers) {
+    auto img = holder->imageVectors[k + 1];
+    neighbours[5] = static_cast<double>(TIFFGetR(img[j * holder->width + i]));
+  }
+}
 
 static void init_data(p4est_t *forest, p4est_topidx_t which_tree,
                       p4est_quadrant_t *quadrant) {
@@ -84,6 +122,9 @@ static void init_data(p4est_t *forest, p4est_topidx_t which_tree,
 static int coarsen_func(p4est_t *forest, p4est_topidx_t which_tree,
                         p4est_quadrant_t *quadrants[]) {
 
+  double v[3];
+  auto input_tiff = static_cast<TiffHolder *>(forest->user_pointer);
+
   /* First quad data */
   auto first_quad = quadrants[0];
   auto qd = static_cast<quad_data_t *>(first_quad->p.user_data);
@@ -97,6 +138,28 @@ static int coarsen_func(p4est_t *forest, p4est_topidx_t which_tree,
     auto bb_tmp = qd->rgb;
     if (bb != bb_tmp) {
       return 0;
+    }
+  }
+
+  /* If one of the quads of the family has a different pixel
+   * face neighbor we do not mark the family for coarsening */
+  double neigh[6];
+  if (input_tiff->initial_level == first_quad->level) {
+    for (int r = 0; r < P4EST_CHILDREN; r++) {
+      auto q = quadrants[r];
+      auto qd = static_cast<quad_data_t *>(q->p.user_data);
+      p4est_qcoord_to_vertex(forest->connectivity, which_tree, q->x, q->y, q->z,
+                             v);
+      auto factor = pow(2., q->level);
+      auto ii = factor * v[0];
+      auto jj = factor * v[1];
+      auto kk = factor * v[2];
+      get_pixel_neighbours(input_tiff, ii, jj, kk, neigh);
+
+      for (int t = 0; t < 6; t++) {
+        if (qd->rgb != neigh[t] && neigh[t] >= 0)
+          return 0;
+      }
     }
   }
 
@@ -238,7 +301,8 @@ int main(int argc, char **argv) {
   auto initial_level = powtwo_div(tt);
   auto g = 1 << initial_level;
 
-  std::cout << "Initial level is: " << g << "\n";
+  std::cout << "Initial level is: " << initial_level << "\n";
+  input_tiff->set_initial_level(initial_level);
 
   /* initialize MPI and p4est internals */
   auto mpi_init_return = sc_MPI_Init(&argc, &argv);
