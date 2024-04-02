@@ -277,13 +277,12 @@ int main(int argc, char **argv) {
   std::string filePath = argv[1];
   auto opt_for_coarsening = argv[2];
 
-  TiffHolder *input_tiff = new TiffHolder(filePath);
-
-  input_tiff->printTiffInfo();
-
   uint32_t layers;
   uint32_t width;
   uint32_t height;
+
+  TiffHolder *input_tiff = new TiffHolder(filePath);
+  input_tiff->printTiffInfo();
 
   if (opt_for_coarsening) {
     width = 416;
