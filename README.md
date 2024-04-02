@@ -37,3 +37,4 @@ as argument the`.tif` image to build the mesh from.
 ### Example
 
 ![simple example](./test_example.png)
+![simple example_zoom](./test_example_zoom.png)
