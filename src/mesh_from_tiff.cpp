@@ -249,9 +249,9 @@ static void write_mesh_to_file(p4est_t *forest, const char *filename) {
   context = p4est_vtk_write_header(context);
   SC_CHECK_ABORT(context != NULL, P4EST_STRING "_vtk: Error writing header");
 
-  context = p4est_vtk_write_cell_dataf(context, 1, /* write tree id */
+  context = p4est_vtk_write_cell_dataf(context, 0, /* do not write tree id */
                                        0,          /* do not write the level */
-                                       1,          /* write the rank */
+                                       0,          /* do no write the rank */
                                        0,          /* do not wrap the rank */
                                        1, /* Number of scalars data sets */
                                        0 /* Number of vector data sets */,
@@ -269,8 +269,11 @@ int main(int argc, char **argv) {
 
   if (argc < 3) {
     std::cout << "Usage: mpirun -np <nprocs> " << argv[0]
-              << " <path_to_tiff>  <tweak_dims>"
-              << "\n";
+              << " <path_to_tiff>  <Nx> <Ny> <Nz> \n"
+              << " If no image dimensions are given those read\n"
+              << " from the tiff file are used. The idea to specify them \n"
+              << " is to tweak the dimensions such that gcd(Nx, Ny, Nz) \n"
+              << " yields the biggest power of two as possible. \n";
     return 1;
   }
 
@@ -282,12 +285,11 @@ int main(int argc, char **argv) {
   uint32_t height;
 
   TiffHolder *input_tiff = new TiffHolder(filePath);
-  input_tiff->printTiffInfo();
 
   if (opt_for_coarsening) {
-    width = 416;
-    height = 368;
-    layers = 16;
+    width = atoi(argv[2]);
+    height = atoi(argv[3]);
+    layers = atoi(argv[4]);
   } else {
     width = input_tiff->width;
     height = input_tiff->height;
@@ -300,12 +302,20 @@ int main(int argc, char **argv) {
   auto initial_level = powtwo_div(tt);
   auto g = 1 << initial_level;
 
-  std::cout << "Initial level is: " << initial_level << "\n";
   input_tiff->set_initial_level(initial_level);
 
   /* initialize MPI and p4est internals */
   auto mpi_init_return = sc_MPI_Init(&argc, &argv);
   SC_CHECK_MPI(mpi_init_return);
+
+  int rank;
+  auto mpi_rank_return = sc_MPI_Comm_rank(sc_MPI_COMM_WORLD, &rank);
+  SC_CHECK_MPI(mpi_rank_return);
+
+  if (rank == 0) {
+    std::cout << "Initial level is: " << initial_level << "\n";
+    input_tiff->printTiffInfo();
+  }
 
   sc_init(sc_MPI_COMM_WORLD, 1, 1, NULL, SC_LP_DEFAULT);
   p4est_init(NULL, SC_LP_PRODUCTION);
@@ -321,7 +331,7 @@ int main(int argc, char **argv) {
                               static_cast<void *>(input_tiff));
 
   /* write the brick in vtk file for visualization */
-  write_mesh_to_file(forest, "mesh_from_tiff_uniform");
+  // write_mesh_to_file(forest, "mesh_from_tiff_uniform");
 
   /* Coarsen based on pixel information */
   p4est_coarsen_ext(forest, 1,             /* Do recursive coarsening ? */
@@ -339,7 +349,12 @@ int main(int argc, char **argv) {
   p4est_partition_ext(forest, 0, NULL);
 
   /* write the brick in vtk file for visualization */
-  write_mesh_to_file(forest, "mesh_from_tiff_adaptive");
+  std::string fullFileName = filePath;
+  auto p(fullFileName.find_last_of('.'));
+  std::string baseName = fullFileName.substr(0, p);
+  baseName.append("_adaptive");
+
+  write_mesh_to_file(forest, baseName.c_str());
 
   /* finalize the libraries */
   p4est_destroy(forest);
