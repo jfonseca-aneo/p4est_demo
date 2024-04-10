@@ -72,7 +72,8 @@ static void get_pixel_neighbours(TiffHolder *holder, int i, int j, int k,
 
   auto img = holder->imageVectors[k];
 
-  memset(neighbours, -1, sizeof(neighbours));
+  for (int f = 0; f < 6; f++)
+    neighbours[f] = -1;
 
   if (i - 1 > 0)
     neighbours[0] =
@@ -91,13 +92,15 @@ static void get_pixel_neighbours(TiffHolder *holder, int i, int j, int k,
         static_cast<double>(TIFFGetR(img[(j + 1) * holder->width + i]));
 
   if (k - 1 > 0) {
-    auto img = holder->imageVectors[k - 1];
-    neighbours[4] = static_cast<double>(TIFFGetR(img[j * holder->width + i]));
+    auto img_bottom = holder->imageVectors[k - 1];
+    neighbours[4] =
+        static_cast<double>(TIFFGetR(img_bottom[j * holder->width + i]));
   }
 
   if (k + 1 < holder->layers) {
-    auto img = holder->imageVectors[k + 1];
-    neighbours[5] = static_cast<double>(TIFFGetR(img[j * holder->width + i]));
+    auto img_up = holder->imageVectors[k + 1];
+    neighbours[5] =
+        static_cast<double>(TIFFGetR(img_up[j * holder->width + i]));
   }
 }
 
@@ -157,7 +160,7 @@ static int coarsen_func(p4est_t *forest, p4est_topidx_t which_tree,
       get_pixel_neighbours(input_tiff, ii, jj, kk, neigh);
 
       for (int t = 0; t < 6; t++) {
-        if (qd->rgb != neigh[t] && neigh[t] >= 0)
+        if (qd->rgb != neigh[t] && neigh[t] != -1)
           return 0;
       }
     }
