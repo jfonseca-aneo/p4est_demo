@@ -270,7 +270,7 @@ static void write_mesh_to_file(p4est_t *forest, const char *filename) {
 
 int main(int argc, char **argv) {
 
-  if (argc < 3) {
+  if (argc < 2) {
     std::cout << "Usage: mpirun -np <nprocs> " << argv[0]
               << " <path_to_tiff>  <Nx> <Ny> <Nz> \n"
               << " If no image dimensions are given those read\n"
