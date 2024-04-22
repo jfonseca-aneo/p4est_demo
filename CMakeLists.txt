@@ -23,7 +23,17 @@ set(P4EST_DEMO VERSION ${P4EST_DEMO_VERSION_STRING})
 
 message(STATUS "Configuring version : ${P4EST_DEMO_VERSION_STRING_FULL}")
 
-add_executable(P4EST_DEMO src/mesh_from_tiff.cpp)
+add_library(P4EST_DEMO SHARED
+  src/AmrMeshFromTiff.cpp
+)
+
+target_include_directories(P4EST_DEMO
+  PUBLIC
+    $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
 
 find_package(MPI REQUIRED)
 find_package(TIFF REQUIRED)
@@ -38,7 +48,11 @@ target_link_libraries(P4EST_DEMO
   PUBLIC ${P4EST_LIBRARIES} TIFF::TIFF
 )
 
+add_subdirectory (demo_exe)
+
+install (TARGETS P4EST_DEMO DESTINATION lib)
+
 add_custom_target(copy-files ALL
   COMMAND ${CMAKE_COMMAND} -E copy_directory
   ${CMAKE_SOURCE_DIR}/test
-  ${CMAKE_CURRENT_BINARY_DIR})
+  ${CMAKE_CURRENT_BINARY_DIR}/demo_exe)

@@ -1,67 +1,20 @@
 #include <iostream>
-#include <p4est_to_p8est.h>
+
+#ifdef P4_TO_P8
 #include <p8est.h>
 #include <p8est_extended.h>
 #include <p8est_vtk.h>
+#else
+#include <p4est.h>
+#include <p4est_extended.h>
+#include <p4est_vtk.h>
+#endif
+
 #include <stdlib.h>
 #include <tiffio.h>
 #include <vector>
 
-class TiffHolder {
-private:
-  TIFF *tiff_to_track = nullptr;
-
-public:
-  uint32_t layers;
-  uint32_t width;
-  uint32_t height;
-  std::vector<std::vector<uint32_t>> imageVectors;
-
-  int initial_level = 0;
-
-  TiffHolder(std::string filePath) {
-
-    const char *pathAsCString = filePath.c_str();
-
-    tiff_to_track = TIFFOpen(pathAsCString, "r");
-
-    if (tiff_to_track) {
-
-      // Get image information
-      TIFFGetField(tiff_to_track, TIFFTAG_IMAGEWIDTH, &width);
-      TIFFGetField(tiff_to_track, TIFFTAG_IMAGELENGTH, &height);
-      layers = TIFFNumberOfDirectories(tiff_to_track);
-
-      for (int l = 0; l < layers; l++) {
-
-        TIFFSetDirectory(tiff_to_track, l);
-
-        // Allocate memory for current image layer
-        std::vector<uint32_t> raster(width * height);
-
-        // Read the image
-        if (TIFFReadRGBAImage(tiff_to_track, width, height, raster.data())) {
-          // Add the image data to the vector
-          imageVectors.push_back(std::move(raster));
-        }
-      }
-
-      // Close TIFF file
-      TIFFClose(tiff_to_track);
-    }
-  }
-
-  ~TiffHolder(){};
-
-  void set_initial_level(int level) { initial_level = level; }
-
-  void printTiffInfo() {
-    std::cout << "Image dimension information:\n";
-    std::cout << "Dim X: " << width << "\n";
-    std::cout << "Dim Y: " << height << "\n";
-    std::cout << "Dim Z: " << layers << "\n";
-  }
-};
+#include <TiffHolder.hpp>
 
 typedef struct quad_data {
   double rgb;
@@ -72,7 +25,7 @@ static void get_pixel_neighbours(TiffHolder *holder, int i, int j, int k,
 
   auto img = holder->imageVectors[k];
 
-  for (int f = 0; f < 6; f++)
+  for (int f = 0; f < P4EST_FACES; f++)
     neighbours[f] = -1;
 
   if (i - 1 > 0)
@@ -91,6 +44,7 @@ static void get_pixel_neighbours(TiffHolder *holder, int i, int j, int k,
     neighbours[3] =
         static_cast<double>(TIFFGetR(img[(j + 1) * holder->width + i]));
 
+#ifdef P4_TO_P8
   if (k - 1 > 0) {
     auto img_bottom = holder->imageVectors[k - 1];
     neighbours[4] =
@@ -102,18 +56,24 @@ static void get_pixel_neighbours(TiffHolder *holder, int i, int j, int k,
     neighbours[5] =
         static_cast<double>(TIFFGetR(img_up[j * holder->width + i]));
   }
+#endif
 }
 
 static void init_data(p4est_t *forest, p4est_topidx_t which_tree,
                       p4est_quadrant_t *quadrant) {
 
-  double v[3];
+  double v[] = {0, 0, 0};
 
   auto input_tiff = static_cast<TiffHolder *>(forest->user_pointer);
 
   auto factor = pow(2., quadrant->level);
   p4est_qcoord_to_vertex(forest->connectivity, which_tree, quadrant->x,
-                         quadrant->y, quadrant->z, v);
+                         quadrant->y,
+#ifdef P4_TO_P8
+                         quadrant->z,
+#endif
+                         v);
+
   auto qdata = static_cast<quad_data_t *>(quadrant->p.user_data);
 
   auto img = input_tiff->imageVectors[factor * v[2]];
@@ -125,7 +85,7 @@ static void init_data(p4est_t *forest, p4est_topidx_t which_tree,
 static int coarsen_func(p4est_t *forest, p4est_topidx_t which_tree,
                         p4est_quadrant_t *quadrants[]) {
 
-  double v[3];
+  double v[] = {0, 0, 0};
   auto input_tiff = static_cast<TiffHolder *>(forest->user_pointer);
 
   /* First quad data */
@@ -146,20 +106,25 @@ static int coarsen_func(p4est_t *forest, p4est_topidx_t which_tree,
 
   /* If one of the quads of the family has a different pixel
    * face neighbor we do not mark the family for coarsening */
-  double neigh[6];
+
+  double neigh[P4EST_FACES];
   if (input_tiff->initial_level == first_quad->level) {
     for (int r = 0; r < P4EST_CHILDREN; r++) {
       auto q = quadrants[r];
       auto qd = static_cast<quad_data_t *>(q->p.user_data);
-      p4est_qcoord_to_vertex(forest->connectivity, which_tree, q->x, q->y, q->z,
+      p4est_qcoord_to_vertex(forest->connectivity, which_tree, q->x, q->y,
+#ifdef P4_TO_P8
+                             q->z,
+#endif
                              v);
+
       auto factor = pow(2., q->level);
       auto ii = factor * v[0];
       auto jj = factor * v[1];
       auto kk = factor * v[2];
       get_pixel_neighbours(input_tiff, ii, jj, kk, neigh);
 
-      for (int t = 0; t < 6; t++) {
+      for (int t = 0; t < P4EST_FACES; t++) {
         if (qd->rgb != neigh[t] && neigh[t] != -1)
           return 0;
       }
@@ -249,11 +214,13 @@ static void write_mesh_to_file(p4est_t *forest, const char *filename) {
 
   p4est_vtk_context_set_continuous(context, 1);
 
+  p4est_vtk_context_set_scale(context, 1.0);
+
   context = p4est_vtk_write_header(context);
   SC_CHECK_ABORT(context != NULL, P4EST_STRING "_vtk: Error writing header");
 
-  context = p4est_vtk_write_cell_dataf(context, 0, /* do not write tree id */
-                                       0,          /* do not write the level */
+  context = p4est_vtk_write_cell_dataf(context, 1, /* do not write tree id */
+                                       1,          /* do not write the level */
                                        0,          /* do no write the rank */
                                        0,          /* do not wrap the rank */
                                        1, /* Number of scalars data sets */
@@ -287,16 +254,16 @@ int main(int argc, char **argv) {
   uint32_t width;
   uint32_t height;
 
-  TiffHolder *input_tiff = new TiffHolder(filePath);
+  TiffHolder input_tiff(filePath);
 
   if (opt_for_coarsening) {
     width = atoi(argv[2]);
     height = atoi(argv[3]);
     layers = atoi(argv[4]);
   } else {
-    width = input_tiff->width;
-    height = input_tiff->height;
-    layers = input_tiff->layers;
+    width = input_tiff.width;
+    height = input_tiff.height;
+    layers = input_tiff.layers;
   }
 
   auto t = my_gcd(width, height);
@@ -305,7 +272,7 @@ int main(int argc, char **argv) {
   auto initial_level = powtwo_div(tt);
   auto g = 1 << initial_level;
 
-  input_tiff->set_initial_level(initial_level);
+  input_tiff.set_initial_level(initial_level);
 
   /* initialize MPI and p4est internals */
   auto mpi_init_return = sc_MPI_Init(&argc, &argv);
@@ -317,7 +284,7 @@ int main(int argc, char **argv) {
 
   if (rank == 0) {
     std::cout << "Initial level is: " << initial_level << "\n";
-    input_tiff->printTiffInfo();
+    input_tiff.printTiffInfo();
   }
 
   sc_init(sc_MPI_COMM_WORLD, 1, 1, NULL, SC_LP_DEFAULT);
@@ -325,22 +292,31 @@ int main(int argc, char **argv) {
 
   /* initialize connectivity structure with a brick that will be refined
   to match the input tiff dimensions */
-  auto connectivity =
-      p4est_connectivity_new_brick(width / g, height / g, layers / g, 0, 0, 0);
+  auto connectivity = p4est_connectivity_new_brick(width / g, height / g,
+#ifdef P4_TO_P8
+                                                   layers / g, 0,
+#endif
+                                                   0, 0);
 
   /* initialize main p4est structure */
   auto forest = p4est_new_ext(sc_MPI_COMM_WORLD, connectivity, 0, initial_level,
                               1, sizeof(quad_data_t), init_data,
-                              static_cast<void *>(input_tiff));
+                              static_cast<void *>(&input_tiff));
 
   /* write the brick in vtk file for visualization */
-  // write_mesh_to_file(forest, "mesh_from_tiff_uniform");
+  {
+    std::string fullFileName = filePath;
+    auto p(fullFileName.find_last_of('.'));
+    std::string baseName = fullFileName.substr(0, p);
+    baseName.append("_uniform");
+    write_mesh_to_file(forest, baseName.c_str());
+  }
 
   /* Coarsen based on pixel information */
   p4est_coarsen_ext(forest, 1,             /* Do recursive coarsening ? */
                     0,                     /* Do callback orphans ? */
                     coarsen_func,          /* callback with coarsen criteria */
-                    NULL,                  /* callback to init use data */
+                    NULL,                  /* callback to init user data */
                     replace_for_coarsening /* callback to replace incoming quads
                                               based on quads they replace */
   );
@@ -352,12 +328,13 @@ int main(int argc, char **argv) {
   p4est_partition_ext(forest, 0, NULL);
 
   /* write the brick in vtk file for visualization */
-  std::string fullFileName = filePath;
-  auto p(fullFileName.find_last_of('.'));
-  std::string baseName = fullFileName.substr(0, p);
-  baseName.append("_adaptive");
-
-  write_mesh_to_file(forest, baseName.c_str());
+  {
+    std::string fullFileName = filePath;
+    auto p(fullFileName.find_last_of('.'));
+    std::string baseName = fullFileName.substr(0, p);
+    baseName.append("_adaptive");
+    write_mesh_to_file(forest, baseName.c_str());
+  }
 
   /* finalize the libraries */
   p4est_destroy(forest);
@@ -368,8 +345,6 @@ int main(int argc, char **argv) {
   SC_CHECK_MPI(mpi_finalize_ret);
 
   sc_finalize();
-
-  delete input_tiff;
 
   return 0;
 }
