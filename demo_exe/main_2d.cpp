@@ -308,6 +308,8 @@ int main(int argc, char **argv) {
     std::string fullFileName = filePath;
     auto p(fullFileName.find_last_of('.'));
     std::string baseName = fullFileName.substr(0, p);
+    baseName.append("_");
+    baseName.append(P4EST_STRING);
     baseName.append("_uniform");
     write_mesh_to_file(forest, baseName.c_str());
   }
@@ -332,6 +334,8 @@ int main(int argc, char **argv) {
     std::string fullFileName = filePath;
     auto p(fullFileName.find_last_of('.'));
     std::string baseName = fullFileName.substr(0, p);
+    baseName.append("_");
+    baseName.append(P4EST_STRING);
     baseName.append("_adaptive");
     write_mesh_to_file(forest, baseName.c_str());
   }
