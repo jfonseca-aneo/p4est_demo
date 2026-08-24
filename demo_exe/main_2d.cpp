@@ -240,7 +240,7 @@ static void write_mesh_to_file(p4est_t *forest, const char *filename) {
 
 int main(int argc, char **argv) {
 
-  if (argc < 2) {
+  if (argc != 2 && argc != 5) {
     std::cout << "Usage: mpirun -np <nprocs> " << argv[0]
               << " <path_to_tiff>  <Nx> <Ny> <Nz> \n"
               << " If no image dimensions are given those read\n"
@@ -251,7 +251,6 @@ int main(int argc, char **argv) {
   }
 
   std::string filePath = argv[1];
-  auto opt_for_coarsening = argv[2];
 
   uint32_t layers;
   uint32_t width;
@@ -259,7 +258,7 @@ int main(int argc, char **argv) {
 
   TiffHolder input_tiff(filePath);
 
-  if (opt_for_coarsening) {
+  if (argc == 5) {
     width = atoi(argv[2]);
     height = atoi(argv[3]);
     layers = atoi(argv[4]);
