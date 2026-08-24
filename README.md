@@ -15,6 +15,7 @@ fine between phase transitions / boundaries.
 
 - [p4est](https://github.com/cburstedde/p4est)
 - [libTIFF](http://www.libtiff.org/)
+- an MPI implementation (e.g. OpenMPI or MPICH)
 
 Assuming that both libraries are installed, in particular the `libTIFF` is on your `PATH`.
 We provide a minimal Cmake module to find and link against `p4est`, you should define the variable
@@ -31,8 +32,22 @@ make
 
 ## Usage
 
-Successful compilation yields the  executable `/build_dir/P4EST_DEMO` which takes
-as argument the`.tif` image to build the mesh from.
+Successful compilation yields the executables `main_2d` and `main_3d` under
+`/build_dir/src`, which take as argument the `.tif` image to build the mesh
+from, and optionally the `Nx Ny Nz` dimensions to override those read from
+the image:
+
+```bash
+
+mpirun -np <nprocs> ./main_2d <path_to_tiff> [<Nx> <Ny> <Nz>]
+
+```
+
+Sample synthetic input images (a coarse anode and cathode microstructure,
+each with several material phases) are provided under
+[`data/image_anode`](./data/image_anode) and
+[`data/image_cathode`](./data/image_cathode); they are copied next to the
+executables at build time.
 
 ### Example
 
