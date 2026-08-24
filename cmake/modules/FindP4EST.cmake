@@ -38,9 +38,15 @@ if (DEFINED P4EST_ROOT)
     NO_DEFAULT_PATH
     NO_SYSTEM_ENVIRONMENT_PATH)
 
-  list(APPEND P4EST_LIBRARY ${SC_LIBRARY})
-
 endif (DEFINED P4EST_ROOT)
+
+# Fall back to the default system search paths if P4EST_ROOT was not set,
+# or if it did not yield a result.
+find_path(P4EST_INCLUDE_DIR NAMES p4est.h PATH_SUFFIXES p4est)
+find_library(P4EST_LIBRARY NAMES p4est)
+find_library(SC_LIBRARY NAMES sc)
+
+list(APPEND P4EST_LIBRARY ${SC_LIBRARY})
 
 set(P4EST_INCLUDE_DIRS ${P4EST_INCLUDE_DIR})
 set(P4EST_LIBRARIES ${P4EST_LIBRARY})
