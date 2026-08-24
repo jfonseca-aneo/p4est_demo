@@ -23,16 +23,12 @@ set(P4EST_DEMO VERSION ${P4EST_DEMO_VERSION_STRING})
 
 message(STATUS "Configuring version : ${P4EST_DEMO_VERSION_STRING_FULL}")
 
-add_library(P4EST_DEMO SHARED
-  src/AmrMeshFromTiff.cpp
-)
+add_library(P4EST_DEMO INTERFACE)
 
 target_include_directories(P4EST_DEMO
-  PUBLIC
+  INTERFACE
     $<INSTALL_INTERFACE:include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 find_package(MPI REQUIRED)
@@ -45,7 +41,7 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MPI_CXX_COMPILE_OPTIONS}")
 set (CMAKE_CXX_COMPILER "${MPI_CXX_COMPILER}")
 
 target_link_libraries(P4EST_DEMO
-  PUBLIC ${P4EST_LIBRARIES} TIFF::TIFF
+  INTERFACE ${P4EST_LIBRARIES} TIFF::TIFF
 )
 
 add_subdirectory (demo_exe)
