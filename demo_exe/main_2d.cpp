@@ -16,47 +16,47 @@
 
 #include <TiffHolder.hpp>
 
-#define INACTIVE_CELL 3
+#define INACTIVE_CELL -1
 
 typedef struct quad_data {
   uint8_t rgb;
 } quad_data_t;
 
 static void get_pixel_neighbours(TiffHolder *holder, int i, int j, int k,
-                                 uint8_t *neighbours) {
+                                 int *neighbours) {
 
-  auto img = holder->imageVectors[k];
+  const auto &img = holder->imageVectors[k];
 
   for (auto f = 0; f < P4EST_FACES; f++)
     neighbours[f] = INACTIVE_CELL;
 
-  if (i - 1 > 0)
+  if (i - 1 >= 0)
     neighbours[0] =
-        static_cast<uint8_t>(TIFFGetR(img[j * holder->width + i - 1]));
+        static_cast<int>(TIFFGetR(img[j * holder->width + i - 1]));
 
   if (i + 1 < holder->width)
     neighbours[1] =
-        static_cast<uint8_t>(TIFFGetR(img[j * holder->width + i + 1]));
+        static_cast<int>(TIFFGetR(img[j * holder->width + i + 1]));
 
-  if (j - 1 > 0)
+  if (j - 1 >= 0)
     neighbours[2] =
-        static_cast<uint8_t>(TIFFGetR(img[(j - 1) * holder->width + i]));
+        static_cast<int>(TIFFGetR(img[(j - 1) * holder->width + i]));
 
   if (j + 1 < holder->height)
     neighbours[3] =
-        static_cast<uint8_t>(TIFFGetR(img[(j + 1) * holder->width + i]));
+        static_cast<int>(TIFFGetR(img[(j + 1) * holder->width + i]));
 
 #ifdef P4_TO_P8
-  if (k - 1 > 0) {
-    auto img_bottom = holder->imageVectors[k - 1];
+  if (k - 1 >= 0) {
+    const auto &img_bottom = holder->imageVectors[k - 1];
     neighbours[4] =
-        static_cast<uint32_t>(TIFFGetR(img_bottom[j * holder->width + i]));
+        static_cast<int>(TIFFGetR(img_bottom[j * holder->width + i]));
   }
 
   if (k + 1 < holder->layers) {
-    auto img_up = holder->imageVectors[k + 1];
+    const auto &img_up = holder->imageVectors[k + 1];
     neighbours[5] =
-        static_cast<uint32_t>(TIFFGetR(img_up[j * holder->width + i]));
+        static_cast<int>(TIFFGetR(img_up[j * holder->width + i]));
   }
 #endif
 }
@@ -78,7 +78,7 @@ static void init_data(p4est_t *forest, p4est_topidx_t which_tree,
 
   auto qdata = static_cast<quad_data_t *>(quadrant->p.user_data);
 
-  auto img = input_tiff->imageVectors[factor * v[2]];
+  const auto &img = input_tiff->imageVectors[factor * v[2]];
 
   qdata->rgb = static_cast<uint8_t>(
       TIFFGetR(img[factor * v[1] * input_tiff->width + factor * v[0]]));
@@ -109,7 +109,7 @@ static int coarsen_func(p4est_t *forest, p4est_topidx_t which_tree,
   /* If one of the quads of the family has a different pixel
    * face neighbor we do not mark the family for coarsening */
 
-  uint8_t neigh[P4EST_FACES];
+  int neigh[P4EST_FACES];
   if (input_tiff->initial_level == first_quad->level) {
     for (int r = 0; r < P4EST_CHILDREN; r++) {
       auto q = quadrants[r];
