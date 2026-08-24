@@ -44,11 +44,11 @@ target_link_libraries(P4EST_DEMO
   INTERFACE ${P4EST_LIBRARIES} TIFF::TIFF
 )
 
-add_subdirectory (demo_exe)
+add_subdirectory (src)
 
 install (TARGETS P4EST_DEMO DESTINATION lib)
 
 add_custom_target(copy-files ALL
   COMMAND ${CMAKE_COMMAND} -E copy_directory
-  ${CMAKE_SOURCE_DIR}/test
-  ${CMAKE_CURRENT_BINARY_DIR}/demo_exe)
+  ${CMAKE_SOURCE_DIR}/data
+  ${CMAKE_CURRENT_BINARY_DIR}/src)
