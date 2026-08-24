@@ -42,6 +42,7 @@
 # Input tif files
 *.tff
 *.tif
+!data/**/*.tif
 
 # makefiles
 Makefile
