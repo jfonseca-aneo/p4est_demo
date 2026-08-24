@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 include(CheckCXXCompilerFlag)
 
-if ($(P4EST_DEMO_SOURCE_DIR) STREQUAL $(CMAKE_BINARY_DIR))
+if (${PROJECT_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
   message(FATAL_ERROR "In place build not allowed; please use a separate build directory")
 endif()
 
